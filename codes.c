@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "linkedList.h"
+#include "codes.h"
 
 #define MAX_GROUP_LEN 8
 
@@ -48,6 +49,23 @@ const char* codesNum[] = {"-----",	// 0
 						"---..",	// 8
 						"----.",};	// 9
 
+#define PUNCT_CODES_NUM 15
+const char* codesPunct[][2] = {{".-.-.-", "."},
+							{"--..--", ","},
+							{"..--..", "?"},
+							{"-..-.", "/"},
+							{"-.--.", "("},
+							{"-.--.-", ")"},
+							{".-...", "&"},
+							{"---...", ":"},
+							{"-.-.-.", ";"},
+							{"-...-", "="},
+							{".-.-.", "+"},
+							{"-....-", "-"},
+							{"..--.-", "_"},
+							{".-..-.", "\""},
+							{".--.-.", "@"}};
+
 char morseToAscii(char* morse){
 	for (int i = 0; i < ALPHA_CODES_NUM; i++){
 		if (strcmp(morse, codesAlpha[i]) == 0){
@@ -57,6 +75,11 @@ char morseToAscii(char* morse){
 	for (int i = 0; i < NUM_CODES_NUM; i++){
 		if (strcmp(morse, codesNum[i]) == 0){
 			return(i + '0');
+		}
+	}
+	for (int i = 0; i < PUNCT_CODES_NUM; i++){
+		if (strcmp(morse, codesPunct[i][0]) == 0){
+			return(codesPunct[i][1][0]);
 		}
 	}
 	return(0);
