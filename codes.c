@@ -124,6 +124,10 @@ int decode(LList* timings){
 
 				groupI = 0;
 			}
+			// Between words TODO: Magic number
+			if (gap > avgGap * 2.5){
+				printf(" ");
+			}
 		}
 		// On dash
 		if (cur->ent.frameR - cur->ent.frameD >= avgLength){
