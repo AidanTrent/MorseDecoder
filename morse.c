@@ -45,13 +45,73 @@ float getPCMAvg(ma_decoder* decoder){
 	return(avg);
 }
 
+// Populate a linked list with timings of "depressions" and "releases"
+LList* getTimings(ma_decoder* decoder){
+	ma_result result;
+
+	// Get avg
+	float avg = getPCMAvg(decoder);
+	if (avg < 0){
+		return(NULL);
+	}
+
+	// Linked list vars
+	LList* timings = NULL;
+	Entity time = {0,0};
+	// Conditional vars
+	int diverge = 0; // Toggles on/off when over/under avg
+	float loopAvg = 0;
+	// Frame reading vars
+	ma_uint64 totalFramesRead = 0;
+	ma_uint64 framesRead = RATE / 100; // TODO: Magic number
+	float frames[RATE / 100];
+
+	ma_data_source_seek_to_pcm_frame(decoder, 0); // Reset pos
+	while (framesRead == RATE / 100){
+		result = ma_data_source_read_pcm_frames(decoder, frames, RATE / 100, &framesRead);
+		totalFramesRead += framesRead;
+		if (result != MA_SUCCESS) {
+			perror("ma_data_source_read_pcm_frames");
+			return(NULL);
+		}
+
+		for (int i = 0; i < framesRead; i++){
+			loopAvg = ((loopAvg * (i)) + fabs(frames[i])) / (i + 1);
+		}
+		if (loopAvg > avg){
+			//printf("-");
+			if (!diverge){
+				time.frameD = decoder->readPointerInPCMFrames;
+				diverge = 1;
+			}
+		}
+		else{
+			//printf(".");
+			if (diverge){
+				time.frameR = decoder->readPointerInPCMFrames;
+				if (timings == NULL){
+					timings = makeList(&time);
+				}
+				else{
+					insertTail(timings, &time);
+				}
+				diverge = 0;
+			}
+		}
+	}
+	//printf("\n");
+	ma_data_source_seek_to_pcm_frame(decoder, 0); // Reset pos
+
+	return(timings);
+}
+
 int main(int argc, char* argv[]){
 	if (argc != 2){
 		fprintf(stderr, "USAGE: morse FILENAME\n");
 		return(EXIT_FAILURE);
 	}
 
-	// Init sound
+	// Initialize miniaudio
 	ma_result result;
 	ma_engine engine;
 	result = ma_engine_init(NULL, &engine);
@@ -69,55 +129,11 @@ int main(int argc, char* argv[]){
 		return(EXIT_FAILURE);
 	}
 
-	// Calculations
-	LList* timings = NULL;
-	Entity instanceTime = {0,0};
-
-	float avg = getPCMAvg(&decoder);
-	if (avg < 0){
+	// Decode
+	LList* timings = getTimings(&decoder);
+	if (timings == NULL){
 		return(EXIT_FAILURE);
 	}
-
-	int diverge = 0; // Toggles on/off when over/under avg
-	float sampleAvg = 0;
-	ma_uint64 totalFramesRead = 0;
-	ma_uint64 framesRead = RATE / 100;
-	float frames[RATE];
-	while (framesRead == RATE / 100){
-		result = ma_data_source_read_pcm_frames(&decoder, frames, RATE / 100, &framesRead);
-		totalFramesRead += framesRead;
-		if (result != MA_SUCCESS) {
-			perror("ma_data_source_read_pcm_frames");
-			return(EXIT_FAILURE);
-		}
-
-		for (int i = 0; i < framesRead; i++){
-			sampleAvg = ((sampleAvg * (i)) + fabs(frames[i])) / (i + 1); // Can probably replace with faster avg
-		}
-		if (sampleAvg > avg){
-			//printf("-");
-			if (!diverge){
-				instanceTime.frameD = decoder.readPointerInPCMFrames;
-				diverge = 1;
-			}
-		}
-		else{
-			//printf(".");
-			if (diverge){
-				instanceTime.frameR = decoder.readPointerInPCMFrames;
-				if (timings == NULL){
-					timings = makeList(&instanceTime);
-				}
-				else{
-					insertTail(timings, &instanceTime);
-				}
-				diverge = 0;
-			}
-		}
-	}
-	printf("\n");
-	ma_data_source_seek_to_pcm_frame(&decoder, 0); // Reset pos
-
 	decode(timings);
 
 	// Play sound file TODO: Make optional
@@ -127,10 +143,12 @@ int main(int argc, char* argv[]){
 		perror("ma_sound_init_from_data_source");
 		return(EXIT_FAILURE);
 	}
+	printf("\nPlaying file, press enter to exit\n");
 	ma_sound_start(&snd);
 
 	// Exit
 	getchar();
+	freeList(timings);
 	ma_decoder_uninit(&decoder);
 	ma_engine_uninit(&engine);
 	return(EXIT_SUCCESS);
